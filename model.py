@@ -5,10 +5,10 @@ import cv2
 def TrainModel(
         base_model: str = "yolov8n.pt",
         dataset_dir: str = "dataset",
-        epochs: int = 20,
+        epochs: int = 50,
         imgsz: int = 640,
         batch: int = 16,
-        training_device: str = "cpu"
+        training_device: str = "0"
     ) -> ultralytics.YOLO:
     print(f"BASE MODEL: {base_model}")
     model = ultralytics.YOLO(base_model)
@@ -121,18 +121,25 @@ def DetectObjects(
         return ""
 
 def main():
-    # trained_model = TrainModel()
-    if not os.path.exists("C:/Users/test/Grant/Projects/WSU/CS4900/CS4900-Mini-Project-3/dataset/runs/detect/train-2/weights/best.pt"):
+    # trained_model = TrainModel(
+    #     epochs=50,
+    #     training_device="0"
+    # )
+    if not os.path.exists("C:/Users/test/Grant/Projects/WSU/CS4900/CS4900-Mini-Project-3/dataset/runs/detect/train-4/weights/best.pt"):
         trained_model = TrainModel()
     else:
         capture_path = os.path.join(os.getcwd(), "wumbo.jpg")
         detected_path = os.path.join(os.getcwd(), "wumbo_detected.jpg")
-        model_path = os.path.join(os.getcwd(), "dataset", "runs", "detect", "train-2", "weights", "best.pt")
+        model_path = os.path.join(os.getcwd(), "dataset", "runs", "detect", "train-4", "weights", "best.pt")
         # CaptureImage(capture_path=capture_path)
         DetectObjects(
             input_image_path=capture_path, 
             output_image_path=detected_path, 
             yolo_model=model_path
+        )
+        model = ultralytics.YOLO(model_path)
+        results = model.predict(
+            source=0, conf=0.15, show=True  # Opens a live window of your webcam feed
         )
 
 if __name__ == "__main__":
