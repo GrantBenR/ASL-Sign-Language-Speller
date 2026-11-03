@@ -10,7 +10,7 @@ from mediapipe.tasks.python import vision
 # ==========================================
 # CONFIGURATION
 # ==========================================
-TARGET_SIGN = "b"
+TARGET_SIGN = "y"
 MODEL_PATH = "hand_landmarker.task"
 
 if not os.path.exists(MODEL_PATH):
