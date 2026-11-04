@@ -22,6 +22,9 @@ class AslRecognizeGui:
                 (0, 17),  # Palm base
             ]
         ):  
+        # 
+        # Load the model trained on hand motions
+        # 
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Could not find '{model_path}' in the current directory.")
     
@@ -30,9 +33,9 @@ class AslRecognizeGui:
         except FileNotFoundError:
             raise FileNotFoundError("Could not find 'sign_model.pkl'. Train your model first!")
     
-        # ==========================================
-        # INITIALIZE MEDIAPIPE HAND LANDMARKER
-        # ==========================================
+        # 
+        # Initialize the hand tracker stuff
+        # 
         base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
@@ -44,23 +47,25 @@ class AslRecognizeGui:
         )
         self.detector = vision.HandLandmarker.create_from_options(options)
         
-        # ==========================================
-        # TKINTER GUI SETUP
-        # ==========================================
+        # 
+        # Initialize gui stuff
+        # 
         self.hand_connections = hand_connections
         self.root = tk.Tk()
         self.root.title("Sign Language Recognition System (Smoothed)")
         self.root.geometry("900x620")  # Slightly increased height to comfortably fit the quit button
         self.root.configure(bg="#222222")
-    
+        # 
         # Left Frame for Webcam Feed
+        # 
         self.left_frame = tk.Frame(self.root, bg="#222222")
         self.left_frame.pack(side=tk.LEFT, padx=20, pady=20)
     
         self.webcam_label = tk.Label(self.left_frame, bg="#000000")
         self.webcam_label.pack()
-    
+        # 
         # Right Frame for Prediction, Letter Image Panel, & Quit Button
+        # 
         self.right_frame = tk.Frame(self.root, bg="#222222")
         self.right_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=20, pady=20)
     
@@ -74,12 +79,15 @@ class AslRecognizeGui:
             self.right_frame, textvariable=self.prediction_text_var, font=("Arial", 22, "bold"), fg="#00ffcc", bg="#222222"
         )
         self.prediction_label.pack(pady=10)
-    
-        # Panel for [LETTER].png Image display
+
+        # 
+        # Panel for [sign].png Image display
+        # 
         self.image_panel = tk.Label(self.right_frame, bg="#333333", width=200, height=200)
         self.image_panel.pack(pady=15)
-
+        # 
         # Quit Button placed below the image pane
+        # 
         self.quit_button = tk.Button(
             self.right_frame,
             text="Quit",
@@ -94,8 +102,9 @@ class AslRecognizeGui:
             command=self._OnClosing
         )
         self.quit_button.pack(pady=10)
-    
+        # 
         # Initialize OpenCV Video Capture & Smoothing Variables
+        # 
         self.cap = cv2.VideoCapture(0)
         self.prediction_queue = deque(maxlen=15)  # Holds predictions over the last 15 frames (~0.5 sec)
         self.current_displayed_sign = None
