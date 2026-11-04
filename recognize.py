@@ -50,7 +50,7 @@ class AslRecognizeGui:
         self.hand_connections = hand_connections
         self.root = tk.Tk()
         self.root.title("Sign Language Recognition System (Smoothed)")
-        self.root.geometry("900x550")
+        self.root.geometry("900x620")  # Slightly increased height to comfortably fit the quit button
         self.root.configure(bg="#222222")
     
         # Left Frame for Webcam Feed
@@ -60,7 +60,7 @@ class AslRecognizeGui:
         self.webcam_label = tk.Label(self.left_frame, bg="#000000")
         self.webcam_label.pack()
     
-        # Right Frame for Prediction & Letter Image Panel
+        # Right Frame for Prediction, Letter Image Panel, & Quit Button
         self.right_frame = tk.Frame(self.root, bg="#222222")
         self.right_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=20, pady=20)
     
@@ -78,6 +78,22 @@ class AslRecognizeGui:
         # Panel for [LETTER].png Image display
         self.image_panel = tk.Label(self.right_frame, bg="#333333", width=200, height=200)
         self.image_panel.pack(pady=15)
+
+        # Quit Button placed below the image pane
+        self.quit_button = tk.Button(
+            self.right_frame,
+            text="Quit",
+            font=("Arial", 12, "bold"),
+            fg="#ffffff",
+            bg="#d9534f",
+            activebackground="#c9302c",
+            activeforeground="#ffffff",
+            bd=0,
+            padx=20,
+            pady=8,
+            command=self._OnClosing
+        )
+        self.quit_button.pack(pady=10)
     
         # Initialize OpenCV Video Capture & Smoothing Variables
         self.cap = cv2.VideoCapture(0)
@@ -92,7 +108,7 @@ class AslRecognizeGui:
         self.root.mainloop()
 
     def _UpdateGui(
-            self
+            self,
         ):        
         success, frame = self.cap.read()
         if success:
@@ -165,10 +181,10 @@ class AslRecognizeGui:
                 if smoothed_sign != "Uncertain" and os.path.exists(img_path):
                     img = Image.open(img_path)
                     img = img.resize((180, 180), Image.Resampling.LANCZOS)
-                    cached_img_tk = ImageTk.PhotoImage(img)
-                    self.image_panel.configure(image=cached_img_tk, text="")
+                    self.cached_img_tk = ImageTk.PhotoImage(img)
+                    self.image_panel.configure(image=self.cached_img_tk, text="")
                 else:
-                    cached_img_tk = None
+                    self.cached_img_tk = None
                     self.image_panel.configure(image="", text=f"No Image / Uncertain", fg="white")
 
             # Convert OpenCV Frame to Tkinter PhotoImage for the webcam panel
