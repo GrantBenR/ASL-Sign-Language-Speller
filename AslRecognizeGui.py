@@ -12,7 +12,8 @@ from mediapipe.tasks.python import vision
 class AslRecognizeGui:
     def __init__(
             self,
-            model_path: str = "hand_landmarker.task",
+            handlandmark_path: str = "models/handlandmarker/hand_landmarker.task",
+            sign_model_path: str = "models/sign/best.pkl",
             hand_connections: list[tuple[int, int]] = [
                 (0, 1), (1, 2), (2, 3), (3, 4),  # Thumb
                 (0, 5), (5, 6), (6, 7), (7, 8),  # Index
@@ -25,18 +26,18 @@ class AslRecognizeGui:
         # 
         # Load the model trained on hand motions
         # 
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Could not find '{model_path}' in the current directory.")
+        if not os.path.exists(handlandmark_path):
+            raise FileNotFoundError(f"Could not find '{handlandmark_path}' in the current directory.")
     
         try:
-            self.clf = joblib.load("sign_model.pkl")
+            self.clf = joblib.load(sign_model_path)
         except FileNotFoundError:
-            raise FileNotFoundError("Could not find 'sign_model.pkl'. Train your model first!")
+            raise FileNotFoundError(f"Could not find '{sign_model_path}'. Train your model first!")
     
         # 
         # Initialize the hand tracker stuff
         # 
-        base_options = python.BaseOptions(model_asset_path=model_path)
+        base_options = python.BaseOptions(model_asset_path=handlandmark_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
             running_mode=vision.RunningMode.IMAGE,
