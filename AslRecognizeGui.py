@@ -12,7 +12,7 @@ from mediapipe.tasks.python import vision
 class AslRecognizeGui:
     def __init__(
             self,
-            handlandmark_path: str = "models/handlandmarker/hand_landmarker.task",
+            handlandmark_path: str = "models/handlandmarker/best.task",
             sign_model_path: str = "models/sign/best.pkl",
             hand_connections: list[tuple[int, int]] = [
                 (0, 1), (1, 2), (2, 3), (3, 4),  # Thumb
