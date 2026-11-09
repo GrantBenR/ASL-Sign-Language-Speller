@@ -1,5 +1,6 @@
 from collections import Counter, deque
 import os
+import threading
 import cv2
 import joblib
 import mediapipe
@@ -72,7 +73,7 @@ class AslRecognizeGui:
         self.hand_connections = hand_connections
         self.root = tkinter.Tk()
         self.root.title("ASL Finger-Spelling Trainer")
-        self.root.geometry("1050x700")
+        self.root.geometry("1050x730")  # Slightly expanded height for the voice button
         self.root.configure(bg="#222222")
     
         # Left Frame for Webcam Feed
@@ -103,6 +104,12 @@ class AslRecognizeGui:
             self.input_frame, text="Submit", font=("Arial", 11, "bold"), bg="#00aa88", fg="#ffffff", padx=10, command=self._SubmitWord
         )
         self.submit_btn.pack(side=tkinter.RIGHT, padx=(5, 0), pady=5)
+
+        # --- Voice-to-Text Button ---
+        self.voice_btn = tkinter.Button(
+            self.right_frame, text="🎤 Speak Word (Voice-to-Text)", font=("Arial", 11, "bold"), bg="#4285F4", fg="#ffffff", padx=10, pady=6, command=self._StartVoiceInputThread
+        )
+        self.voice_btn.pack(fill=tkinter.X, pady=(0, 10))
 
         # --- Immutable Target Word Display ---
         self.target_display_var = tkinter.StringVar(value="Target Word: [ None ]")
@@ -166,6 +173,26 @@ class AslRecognizeGui:
             self.word_entry.delete(0, tkinter.END)
             self.target_display_var.set(f"Target Word: {self.target_word}")
             self._UpdateTargetPrompt()
+
+    def _StartVoiceInputThread(self):
+        # Run speech recognition in a background thread to prevent freezing the Tkinter GUI
+        self.prediction_text_var.set("Current Prediction: Listening for speech...")
+        threading.Thread(target=self._HandleVoiceInput, daemon=True).start()
+
+    def _HandleVoiceInput(self):
+        spoken_text = self.SpeechToText()
+        if spoken_text:
+            # Clean up text (take the first word if multiple are spoken, uppercase it)
+            clean_word = spoken_text.split()[0].upper()
+            # Safely update GUI elements from the main thread loop
+            self.root.after(0, lambda: self._ApplyVoiceWord(clean_word))
+
+    def _ApplyVoiceWord(self, word):
+        self.target_word = word
+        self.current_index = 0
+        self.is_active_practice = True
+        self.target_display_var.set(f"Target Word: {self.target_word}")
+        self._UpdateTargetPrompt()
 
     def _UpdateTargetPrompt(self):
         if self.current_index < len(self.target_word):
@@ -265,6 +292,7 @@ class AslRecognizeGui:
                     self.match_frame_count += 1
                     # Require holding the correct sign for ~10 frames (~0.3s) to prevent accidental skips
                     if self.match_frame_count >= 10:
+                        self.success_sound.play()
                         self.current_index += 1
                         self.match_frame_count = 0
                         self._UpdateTargetPrompt()
