@@ -30,7 +30,7 @@ class AslRecognizeGui:
                 (13, 17), (17, 18), (18, 19), (19, 20),  # Pinky
                 (0, 17),  # Palm base
             ]
-        ):  
+        ) -> None:  
         # 
         # Load the model trained on hand motions
         # 
@@ -56,9 +56,9 @@ class AslRecognizeGui:
         )
         self.detector = vision.HandLandmarker.create_from_options(options)
         
-        # ==========================================
-        # GAME/SPELLING STATE VARIABLES
-        # ==========================================
+        # 
+        # important game vars
+        # 
         pygame.mixer.init()
         self.success_sound = pygame.mixer.Sound(SUCCESS)
         self.beep_sound = pygame.mixer.Sound(BEEP)
@@ -67,27 +67,31 @@ class AslRecognizeGui:
         self.is_active_practice = False
         self.match_frame_count = 0  # Frame counter to require holding a correct sign steady
 
-        # ==========================================
-        # TKINTER GUI SETUP
-        # ==========================================
+        # 
+        # Tkinter gui setup
+        # 
         self.hand_connections = hand_connections
         self.root = tkinter.Tk()
         self.root.title("ASL Finger-Spelling Trainer")
         self.root.geometry("1050x730")  # Slightly expanded height for the voice button
         self.root.configure(bg="#222222")
-    
+        # 
         # Left Frame for Webcam Feed
+        # 
         self.left_frame = tkinter.Frame(self.root, bg="#222222")
         self.left_frame.pack(side=tkinter.LEFT, padx=20, pady=20)
     
         self.webcam_label = tkinter.Label(self.left_frame, bg="#000000")
         self.webcam_label.pack()
-
+        # 
         # Right Frame for Inputs, Target Display, Prediction Panels, & Quit
+        # 
         self.right_frame = tkinter.Frame(self.root, bg="#222222")
         self.right_frame.pack(side=tkinter.RIGHT, expand=True, fill=tkinter.BOTH, padx=20, pady=20)
     
-        # --- Word Input Section ---
+        # 
+        # word input selection
+        # 
         self.input_frame = tkinter.Frame(self.right_frame, bg="#222222")
         self.input_frame.pack(pady=5, fill=tkinter.X)
 
@@ -105,38 +109,45 @@ class AslRecognizeGui:
         )
         self.submit_btn.pack(side=tkinter.RIGHT, padx=(5, 0), pady=5)
 
-        # --- Voice-to-Text Button ---
+        # 
+        # voice to text button
+        # 
         self.voice_btn = tkinter.Button(
             self.right_frame, text="🎤 Speak Word (Voice-to-Text)", font=("Arial", 11, "bold"), bg="#4285F4", fg="#ffffff", padx=10, pady=6, command=self._StartVoiceInputThread
         )
         self.voice_btn.pack(fill=tkinter.X, pady=(0, 10))
-
-        # --- Immutable Target Word Display ---
+        # 
+        # Immutable Target Word Display
+        # 
         self.target_display_var = tkinter.StringVar(value="Target Word: [ None ]")
         self.target_label = tkinter.Label(
             self.right_frame, textvariable=self.target_display_var, font=("Arial", 13, "italic"), fg="#aaaaaa", bg="#222222"
         )
         self.target_label.pack(anchor=tkinter.W, pady=2)
-
-        # --- Target Letter Instruction / Expected Sign ---
+        # 
+        # Target Letter Instruction / Expected Sign
+        # 
         self.expected_text_var = tkinter.StringVar(value="Sign Target: -")
         self.expected_label = tkinter.Label(
             self.right_frame, textvariable=self.expected_text_var, font=("Arial", 14, "bold"), fg="#ffcc00", bg="#222222"
         )
         self.expected_label.pack(anchor=tkinter.W, pady=2)
-
-        # --- Current Detected Sign Display ---
+        # 
+        # Current Detected Sign Display
+        # 
         self.prediction_text_var = tkinter.StringVar(value="Current Prediction: Waiting...")
         self.prediction_label = tkinter.Label(
             self.right_frame, textvariable=self.prediction_text_var, font=("Arial", 12, "bold"), fg="#00ffcc", bg="#222222"
         )
         self.prediction_label.pack(anchor=tkinter.W, pady=5)
-
-        # --- Panel for Target Letter Reference Image ([LETTER].jpg) ---
+        # 
+        # Panel for Target Letter Reference Image ([LETTER].jpg)
+        # 
         self.image_panel = tkinter.Label(self.right_frame, bg="#333333", width=180, height=180)
         self.image_panel.pack(pady=10)
-
-        # --- Quit Button ---
+        # 
+        # Quit Button
+        # 
         self.quit_button = tkinter.Button(
             self.right_frame,
             text="Quit",
@@ -151,20 +162,26 @@ class AslRecognizeGui:
             command=self._OnClosing
         )
         self.quit_button.pack(pady=5)
-    
+        # 
         # Initialize OpenCV Video Capture & Smoothing Variables
+        # 
         self.cap = cv2.VideoCapture(0)
         self.prediction_queue = deque(maxlen=15)  
         self.current_displayed_sign = None
         self.cached_img_tk = None
     
         self.root.protocol("WM_DELETE_WINDOW", self._OnClosing)
-    
+        # 
         # Start the GUI loop
+        # 
         self.root.after(15, self._UpdateGui)
         self.root.mainloop()
 
-    def _SubmitWord(self):
+    def _SubmitWord(
+            self
+        ) -> None:
+        """Submit word from text field to gui and sanitize it
+        """
         entered_text = self.word_entry.get().strip().upper()
         if entered_text:
             self.target_word = entered_text
@@ -174,12 +191,19 @@ class AslRecognizeGui:
             self.target_display_var.set(f"Target Word: {self.target_word}")
             self._UpdateTargetPrompt()
 
-    def _StartVoiceInputThread(self):
-        # Run speech recognition in a background thread to prevent freezing the Tkinter GUI
+    def _StartVoiceInputThread(
+            self
+        ) -> None:
+        """Run speech recognition in a background thread to prevent freezing the Tkinter GUI
+        """
         self.prediction_text_var.set("Current Prediction: Listening for speech...")
         threading.Thread(target=self._HandleVoiceInput, daemon=True).start()
 
-    def _HandleVoiceInput(self):
+    def _HandleVoiceInput(
+            self
+        ) -> None:
+        """Get speech to text input and sanitize and display it
+        """
         spoken_text = self.SpeechToText()
         if spoken_text:
             # Clean up text (take the first word if multiple are spoken, uppercase it)
@@ -187,14 +211,24 @@ class AslRecognizeGui:
             # Safely update GUI elements from the main thread loop
             self.root.after(0, lambda: self._ApplyVoiceWord(clean_word))
 
-    def _ApplyVoiceWord(self, word):
+    def _ApplyVoiceWord(
+            self, 
+            word: str
+        ) -> None:
+        """Using the word gathered from speech to text, update the gui
+
+        Args:
+            word (str): word from stt
+        """
         self.target_word = word
         self.current_index = 0
         self.is_active_practice = True
         self.target_display_var.set(f"Target Word: {self.target_word}")
         self._UpdateTargetPrompt()
 
-    def _UpdateTargetPrompt(self):
+    def _UpdateTargetPrompt(
+                self
+            ) -> None:
         if self.current_index < len(self.target_word):
             current_char = self.target_word[self.current_index]
             # Show progress formatting (e.g., HE[L]LO)
@@ -209,7 +243,15 @@ class AslRecognizeGui:
             self._LoadLetterImage(None)
             self.is_active_practice = False
 
-    def _LoadLetterImage(self, letter):
+    def _LoadLetterImage(
+            self, 
+            letter: str | None = None
+        ) -> None:
+        """Load the image for letter to the gui
+
+        Args:
+            letter (str | None, optional): string name of letter (e.g. "a"). Defaults to None.
+        """
         if letter is None:
             self.image_panel.configure(image="", text="Complete!", fg="white")
             self.cached_img_tk = None
@@ -225,7 +267,11 @@ class AslRecognizeGui:
             self.cached_img_tk = None
             self.image_panel.configure(image="", text=f"Missing ref:\n{letter}.jpg", fg="white")
 
-    def _UpdateGui(self):        
+    def _UpdateGui(
+            self
+        ) -> None:   
+        """Update the gui cv2 display with the hand skeleton
+        """             
         success, frame = self.cap.read()
         if success:
             frame = cv2.flip(frame, 1)
@@ -309,7 +355,11 @@ class AslRecognizeGui:
 
         self.root.after(15, self._UpdateGui)
 
-    def _OnClosing(self):
+    def _OnClosing(
+            self
+        ) -> None:
+        """Event for window close
+        """
         self.cap.release()
         self.root.destroy()
 
