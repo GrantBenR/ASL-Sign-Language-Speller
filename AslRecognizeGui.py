@@ -3,7 +3,6 @@ import os
 import threading
 import cv2
 import joblib
-import mediapipe
 import numpy
 import tkinter
 import pygame
@@ -11,6 +10,7 @@ import pyttsx3
 import speech_recognition
 import sounddevice
 from PIL import Image, ImageTk
+import mediapipe
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -66,7 +66,7 @@ class AslRecognizeGui:
         self.current_index = 0
         self.is_active_practice = False
         self.match_frame_count = 0  # Frame counter to require holding a correct sign steady
-
+        self.trajectory_history = deque(maxlen=40)  # Holds recent positions for dynamic letters 'J' & 'Z'
         # 
         # Tkinter gui setup
         # 
@@ -296,7 +296,7 @@ class AslRecognizeGui:
                         pt2 = pixel_landmarks[connection[1]]
                         cv2.line(frame, pt1, pt2, (255, 0, 0), 2)
 
-                    # Extract & Normalize landmarks
+                    # Extract & Normalize landmarks for static prediction
                     landmarks = []
                     for lm in hand_landmarks:
                         landmarks.append([lm.x, lm.y, lm.z])
@@ -311,7 +311,7 @@ class AslRecognizeGui:
 
                     features = landmarks.flatten().reshape(1, -1)
 
-                    # Predict
+                    # Static Model Predict
                     prediction = self.clf.predict(features)[0]
                     probabilities = self.clf.predict_proba(features)
                     confidence = numpy.max(probabilities)
@@ -319,7 +319,7 @@ class AslRecognizeGui:
                     if confidence > 0.7:
                         frame_prediction = str(prediction).upper()
 
-            # Smoothing queue logic
+            # Smoothing queue logic for static signs
             self.prediction_queue.append(frame_prediction)
             counts = Counter(self.prediction_queue)
             most_common_sign, frequency = counts.most_common(1)[0]
@@ -331,20 +331,67 @@ class AslRecognizeGui:
                 smoothed_sign = "Uncertain"
                 self.prediction_text_var.set("Current Prediction: Transitioning...")
 
-            # Check if practicing and user matches the target letter
+            # ==========================================
+            # ACTIVE PRACTICE & DYNAMIC SIGN EVALUATION
+            # ==========================================
             if self.is_active_practice and self.current_index < len(self.target_word):
                 target_char = self.target_word[self.current_index]
-                if smoothed_sign == target_char:
-                    self.match_frame_count += 1
-                    # Require holding the correct sign for ~10 frames (~0.3s) to prevent accidental skips
-                    if self.match_frame_count >= 10:
-                        self.success_sound.play()
-                        self.current_index += 1
-                        self.match_frame_count = 0
-                        self._UpdateTargetPrompt()
+
+                if target_char == "Z":
+                    # Track index fingertip (Landmark 8) for 'Z' trajectory
+                    if detection_result.hand_landmarks:
+                        for hand_landmarks in detection_result.hand_landmarks:
+                            tip = hand_landmarks[8]
+                            self.trajectory_history.append((tip.x, tip.y))
+
+                    if len(self.trajectory_history) >= 30:
+                        points = numpy.array(self.trajectory_history)
+                        p1, p2, p3 = points[:10], points[10:20], points[20:]
+                        seg1_dx = p1[-1][0] - p1[0][0]
+                        seg2_dx = p2[-1][0] - p2[0][0]
+                        seg2_dy = p2[-1][1] - p2[0][1]
+                        seg3_dx = p3[-1][0] - p3[0][0]
+
+                        if seg1_dx > 0.04 and seg2_dx < -0.03 and seg2_dy > 0.03 and seg3_dx > 0.04:
+                            self.success_sound.play()
+                            self.current_index += 1
+                            self.trajectory_history.clear()
+                            self._UpdateTargetPrompt()
+
+                elif target_char == "J":
+                    # Track pinky fingertip (Landmark 20) for 'J' hook trajectory
+                    if detection_result.hand_landmarks:
+                        for hand_landmarks in detection_result.hand_landmarks:
+                            tip = hand_landmarks[20]
+                            self.trajectory_history.append((tip.x, tip.y))
+
+                    if len(self.trajectory_history) >= 25:
+                        points = numpy.array(self.trajectory_history)
+                        start_x = points[0][0]
+                        min_y_idx = numpy.argmin(points[:, 1])
+                        end_x = points[-1][0]
+
+                        dipped_down = min_y_idx > 5 and min_y_idx < len(points) - 5
+                        curved_left = end_x < start_x - 0.02
+
+                        if dipped_down and curved_left:
+                            self.success_sound.play()
+                            self.current_index += 1
+                            self.trajectory_history.clear()
+                            self._UpdateTargetPrompt()
+
                 else:
-                    # Reset counter if they drop the sign
-                    self.match_frame_count = max(0, self.match_frame_count - 1)
+                    # Standard static letter verification
+                    self.trajectory_history.clear()
+                    if smoothed_sign == target_char:
+                        self.match_frame_count += 1
+                        if self.match_frame_count >= 10:
+                            self.success_sound.play()
+                            self.current_index += 1
+                            self.match_frame_count = 0
+                            self._UpdateTargetPrompt()
+                    else:
+                        self.match_frame_count = max(0, self.match_frame_count - 1)
 
             # Convert OpenCV Frame to Tkinter PhotoImage for the webcam panel
             cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
