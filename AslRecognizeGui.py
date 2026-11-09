@@ -72,7 +72,7 @@ class AslRecognizeGui:
         # 
         self.hand_connections = hand_connections
         self.root = tkinter.Tk()
-        self.root.title("ASL Finger-Spelling Trainer")
+        self.root.title("HCI: ASL Spelling Practice Tool")
         self.root.geometry("1050x730")  # Slightly expanded height for the voice button
         self.root.configure(bg="#222222")
         # 
