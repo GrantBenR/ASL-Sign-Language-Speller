@@ -16,7 +16,74 @@ from mediapipe.tasks.python import vision
 
 SUCCESS = "assets/sounds/success_chime.mp3"
 BEEP = "assets/sounds/beep.mp3"
-
+BAD_FORM_FEEDBACK_DICT = {
+    "A": {
+        "E": "Move your thumb next to your curled fingers not under.",
+        "M": "Move your thumb next to your curled fingers not under.",
+        "N": "Move your thumb next to your curled fingers not under the middle and index.",
+        "S": "Move your thumb next to your curled fingers not in front of them.",
+        "T": "Move your thumb next to your curled fingers not under the index.",
+    },
+    "C": {
+        "O": "Spread the tips of your fingers out more",
+    },
+    "E": {
+        "A": "Move your thumb under your curled fingers not next to it.",
+        "M": "Curl your fingers more.",
+        "N": "Move your thumb under all your curled fingers not under the middle and index.",
+        "S": "Move your thumb under your curled fingers not in front of them.",
+        "T": "Move your thumb under all your curled fingers not under the index.",
+    },
+    "G": {
+        "H": "Curl middle finger and put your thumb to your index finger.",
+    },
+    "H": {
+        "G": "Extend middle and index fingers.",
+    },
+    "I": {
+        "J": "Keep hand stationary.",
+    },
+    "J": {
+        "I": "Do a sweeping j shaped motion.",
+    },
+    "K": {
+        "R": "Place your thumb on your middle finger and uncross your middle and index fingers."
+    },
+    "M": {
+        "A": "Move your thumb under your flat fingers not next to it.",
+        "E": "Curl your fingers less.",
+        "N": "Move your thumb under all your curled fingers not under the middle and index.",
+        "S": "Move your thumb under your curled fingers not in front of them.",
+        "T": "Move your thumb under all your curled fingers not under the index."
+    },
+    "N": {
+        "A": "Move your thumb under your index and middle fingers not next to them.",
+        "M": "Move your thumb under your index and middle fingers not the others.",
+        "E": "Move your thumb under your index and middle fingers not the others.",
+        "S": "Move your thumb under your index and middle fingers not in front of them.",
+        "T": "Move your thumb under your index and middle fingers not just the index.",
+    },
+    "O": {
+        "C": "Bring your fingertips closer together.",
+    },
+    "R": {
+        "K": "Cross your fingers and place your thumb on your ring finger.",
+    },
+    "S": {
+        "A": "Move your thumb in front of your curled fingers not next to them.",
+        "E": "Move your thumb in front of your curled fingers not under them.",
+        "N": "Move your thumb in front of all your curled fingers not under the middle and index.",
+        "M": "Move your thumb in front of your curled fingers not in under them.",
+        "T": "Move your thumb in front of all your curled fingers not under the index.",
+    },
+    "T": {
+        "A": "Move your thumb under the index not next to them.",
+        "E": "Move your thumb under the just the index and curl the rest.",
+        "N": "Move your thumb under just the index not the middle.",
+        "M": "Move your thumb under the index and curl the rest.",
+        "S": "Move your thumb under the index not in front.",
+    },
+}
 class AslRecognizeGui:
     def __init__(
             self,
@@ -189,6 +256,7 @@ class AslRecognizeGui:
             self.is_active_practice = True
             self.word_entry.delete(0, tkinter.END)
             self.target_display_var.set(f"Target Word: {self.target_word}")
+            self.TextToSpeech(f"Spell {self.target_word} using ASL")
             self._UpdateTargetPrompt()
 
     def _StartVoiceInputThread(
@@ -224,6 +292,7 @@ class AslRecognizeGui:
         self.current_index = 0
         self.is_active_practice = True
         self.target_display_var.set(f"Target Word: {self.target_word}")
+        self.TextToSpeech(f"Spell {self.target_word} using ASL")
         self._UpdateTargetPrompt()
 
     def _UpdateTargetPrompt(
@@ -476,6 +545,12 @@ class AslRecognizeGui:
 
             except speech_recognition.UnknownValueError:
                 self.TextToSpeech("Could not understand. Please speak again after the beep.")
+
+    def CorrectBadForm(self, target: str, actual: str) -> str:
+        # .get() safely handles missing keys and returns an empty string if no rule exists
+        return BAD_FORM_FEEDBACK_DICT.get(target.upper(), {}).get(actual.upper(), "")
+
+
 
 def main():
     AslRecognizeGui()
