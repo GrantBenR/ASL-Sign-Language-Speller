@@ -109,9 +109,6 @@ class AslRecognizeGui:
         except FileNotFoundError:
             raise FileNotFoundError(f"Could not find '{sign_model_path}'. Train your model first!")
     
-        # 
-        # Initialize the hand tracker stuff
-        # 
         base_options = python.BaseOptions(model_asset_path=handlandmark_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
@@ -123,42 +120,63 @@ class AslRecognizeGui:
         )
         self.detector = vision.HandLandmarker.create_from_options(options)
         
-        # 
-        # important game vars
-        # 
+        # Game and correction state variables
         pygame.mixer.init()
         self.success_sound = pygame.mixer.Sound(SUCCESS)
         self.beep_sound = pygame.mixer.Sound(BEEP)
         self.target_word = ""
         self.current_index = 0
         self.is_active_practice = False
-        self.match_frame_count = 0  # Frame counter to require holding a correct sign steady
-        self.trajectory_history = deque(maxlen=40)  # Holds recent positions for dynamic letters 'J' & 'Z'
-        # 
-        # Tkinter gui setup
-        # 
+        self.match_frame_count = 0  
+        self.wrong_frame_count = 0
+        self.last_spoken_wrong_sign = None
+        self.trajectory_history = deque(maxlen=40)  
+
+        # Tkinter GUI Setup
         self.hand_connections = hand_connections
         self.root = tkinter.Tk()
         self.root.title("HCI: ASL Spelling Practice Tool")
-        self.root.geometry("1050x730")  # Slightly expanded height for the voice button
+        self.root.geometry("1050x850")  # Expanded height to fit the transcript box cleanly
         self.root.configure(bg="#222222")
-        # 
-        # Left Frame for Webcam Feed
-        # 
+    
+        # Left Frame for Webcam Feed & Transcript Log
         self.left_frame = tkinter.Frame(self.root, bg="#222222")
         self.left_frame.pack(side=tkinter.LEFT, padx=20, pady=20)
     
         self.webcam_label = tkinter.Label(self.left_frame, bg="#000000")
-        self.webcam_label.pack()
-        # 
+        self.webcam_label.pack(pady=(0, 10))
+
+        # --- Scrollable TTS Transcript Section (Below Webcam) ---
+        self.transcript_label = tkinter.Label(
+            self.left_frame, text="Audio / TTS Log:", font=("Arial", 10, "bold"), fg="#ffffff", bg="#222222"
+        )
+        self.transcript_label.pack(anchor=tkinter.W, pady=(0, 2))
+
+        self.transcript_frame = tkinter.Frame(self.left_frame, bg="#222222")
+        self.transcript_frame.pack(fill=tkinter.X)
+
+        self.transcript_scroll = tkinter.Scrollbar(self.transcript_frame)
+        self.transcript_scroll.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+
+        self.transcript_box = tkinter.Text(
+            self.transcript_frame,
+            height=6,
+            width=50,
+            font=("Consolas", 10),
+            bg="#111111",
+            fg="#00ffcc",
+            insertbackground="white",
+            yscrollcommand=self.transcript_scroll.set,
+            state=tkinter.DISABLED
+        )
+        self.transcript_box.pack(side=tkinter.LEFT, fill=tkinter.X, expand=True)
+        self.transcript_scroll.config(command=self.transcript_box.yview)
+    
         # Right Frame for Inputs, Target Display, Prediction Panels, & Quit
-        # 
         self.right_frame = tkinter.Frame(self.root, bg="#222222")
         self.right_frame.pack(side=tkinter.RIGHT, expand=True, fill=tkinter.BOTH, padx=20, pady=20)
     
-        # 
-        # word input selection
-        # 
+        # Word Input Section
         self.input_frame = tkinter.Frame(self.right_frame, bg="#222222")
         self.input_frame.pack(pady=5, fill=tkinter.X)
 
@@ -176,45 +194,38 @@ class AslRecognizeGui:
         )
         self.submit_btn.pack(side=tkinter.RIGHT, padx=(5, 0), pady=5)
 
-        # 
-        # voice to text button
-        # 
+        # Voice to text button
         self.voice_btn = tkinter.Button(
             self.right_frame, text="🎤 Speak Word (Voice-to-Text)", font=("Arial", 11, "bold"), bg="#4285F4", fg="#ffffff", padx=10, pady=6, command=self._StartVoiceInputThread
         )
         self.voice_btn.pack(fill=tkinter.X, pady=(0, 10))
-        # 
+
         # Immutable Target Word Display
-        # 
         self.target_display_var = tkinter.StringVar(value="Target Word: [ None ]")
         self.target_label = tkinter.Label(
             self.right_frame, textvariable=self.target_display_var, font=("Arial", 13, "italic"), fg="#aaaaaa", bg="#222222"
         )
         self.target_label.pack(anchor=tkinter.W, pady=2)
-        # 
+
         # Target Letter Instruction / Expected Sign
-        # 
         self.expected_text_var = tkinter.StringVar(value="Sign Target: -")
         self.expected_label = tkinter.Label(
             self.right_frame, textvariable=self.expected_text_var, font=("Arial", 14, "bold"), fg="#ffcc00", bg="#222222"
         )
         self.expected_label.pack(anchor=tkinter.W, pady=2)
-        # 
+
         # Current Detected Sign Display
-        # 
         self.prediction_text_var = tkinter.StringVar(value="Current Prediction: Waiting...")
         self.prediction_label = tkinter.Label(
             self.right_frame, textvariable=self.prediction_text_var, font=("Arial", 12, "bold"), fg="#00ffcc", bg="#222222"
         )
         self.prediction_label.pack(anchor=tkinter.W, pady=5)
-        # 
+
         # Panel for Target Letter Reference Image ([LETTER].jpg)
-        # 
         self.image_panel = tkinter.Label(self.right_frame, bg="#333333", width=180, height=180)
         self.image_panel.pack(pady=10)
-        # 
+
         # Quit Button
-        # 
         self.quit_button = tkinter.Button(
             self.right_frame,
             text="Quit",
@@ -229,21 +240,35 @@ class AslRecognizeGui:
             command=self._OnClosing
         )
         self.quit_button.pack(pady=5)
-        # 
+    
         # Initialize OpenCV Video Capture & Smoothing Variables
-        # 
         self.cap = cv2.VideoCapture(0)
         self.prediction_queue = deque(maxlen=15)  
         self.current_displayed_sign = None
         self.cached_img_tk = None
     
         self.root.protocol("WM_DELETE_WINDOW", self._OnClosing)
-        # 
-        # Start the GUI loop
-        # 
+    
         self.root.after(15, self._UpdateGui)
         self.root.mainloop()
 
+    def _LogSpeech(
+            self,
+            text: str
+        ) -> None:
+        """Safely appends spoken text to the scrollable transcript box on the main thread.
+
+        Args:
+            text (str): string to display
+        """
+        def update_box():
+            self.transcript_box.config(state=tkinter.NORMAL)
+            self.transcript_box.insert(tkinter.END, f"• {text}\n")
+            self.transcript_box.see(tkinter.END)  # Auto-scrolls to the bottom
+            self.transcript_box.config(state=tkinter.DISABLED)
+        
+        self.root.after(0, update_box)
+    
     def _SubmitWord(
             self
         ) -> None:
@@ -256,7 +281,9 @@ class AslRecognizeGui:
             self.is_active_practice = True
             self.word_entry.delete(0, tkinter.END)
             self.target_display_var.set(f"Target Word: {self.target_word}")
-            self.TextToSpeech(f"Spell {self.target_word} using ASL")
+            self.wrong_frame_count = 0
+            self.last_spoken_wrong_sign = None
+            threading.Thread(target=self.TextToSpeech, args=(f"Spell {self.target_word} using ASL",), daemon=True).start()
             self._UpdateTargetPrompt()
 
     def _StartVoiceInputThread(
@@ -292,7 +319,9 @@ class AslRecognizeGui:
         self.current_index = 0
         self.is_active_practice = True
         self.target_display_var.set(f"Target Word: {self.target_word}")
-        self.TextToSpeech(f"Spell {self.target_word} using ASL")
+        self.wrong_frame_count = 0
+        self.last_spoken_wrong_sign = None
+        threading.Thread(target=self.TextToSpeech, args=(f"Spell {self.target_word} using ASL",), daemon=True).start()
         self._UpdateTargetPrompt()
 
     def _UpdateTargetPrompt(
@@ -300,11 +329,12 @@ class AslRecognizeGui:
             ) -> None:
         if self.current_index < len(self.target_word):
             current_char = self.target_word[self.current_index]
-            # Show progress formatting (e.g., HE[L]LO)
             progress_str = "".join([f"[{c}]" if i == self.current_index else c for i, c in enumerate(self.target_word)])
             self.target_display_var.set(f"Progress: {progress_str}")
             self.expected_text_var.set(f"Sign Target: '{current_char}'")
             self._LoadLetterImage(current_char)
+            self.wrong_frame_count = 0
+            self.last_spoken_wrong_sign = None
         else:
             self.success_sound.play()
             self.target_display_var.set(f"Word Completed: {self.target_word} 🎉")
@@ -407,7 +437,8 @@ class AslRecognizeGui:
                 target_char = self.target_word[self.current_index]
 
                 if target_char == "Z":
-                    # Track index fingertip (Landmark 8) for 'Z' trajectory
+                    self.wrong_frame_count = 0
+                    self.last_spoken_wrong_sign = None
                     if detection_result.hand_landmarks:
                         for hand_landmarks in detection_result.hand_landmarks:
                             tip = hand_landmarks[8]
@@ -428,7 +459,8 @@ class AslRecognizeGui:
                             self._UpdateTargetPrompt()
 
                 elif target_char == "J":
-                    # Track pinky fingertip (Landmark 20) for 'J' hook trajectory
+                    self.wrong_frame_count = 0
+                    self.last_spoken_wrong_sign = None
                     if detection_result.hand_landmarks:
                         for hand_landmarks in detection_result.hand_landmarks:
                             tip = hand_landmarks[20]
@@ -450,10 +482,12 @@ class AslRecognizeGui:
                             self._UpdateTargetPrompt()
 
                 else:
-                    # Standard static letter verification
                     self.trajectory_history.clear()
                     if smoothed_sign == target_char:
                         self.match_frame_count += 1
+                        self.wrong_frame_count = 0
+                        self.last_spoken_wrong_sign = None
+                        
                         if self.match_frame_count >= 10:
                             self.success_sound.play()
                             self.current_index += 1
@@ -461,6 +495,23 @@ class AslRecognizeGui:
                             self._UpdateTargetPrompt()
                     else:
                         self.match_frame_count = max(0, self.match_frame_count - 1)
+                        
+                        # Monitor wrong form consistency
+                        if smoothed_sign != "Uncertain" and smoothed_sign != target_char:
+                            if smoothed_sign == self.last_spoken_wrong_sign:
+                                self.wrong_frame_count += 1
+                            else:
+                                self.last_spoken_wrong_sign = smoothed_sign
+                                self.wrong_frame_count = 1
+
+                            # Trigger TTS feedback after holding a persistent incorrect sign for ~30 frames (~1s)
+                            if self.wrong_frame_count == 30:
+                                advice = self.CorrectBadForm(target_char, smoothed_sign)
+                                if advice:
+                                    threading.Thread(target=self.TextToSpeech, args=(advice,), daemon=True).start()
+                                self.wrong_frame_count = 0
+                        else:
+                            self.wrong_frame_count = max(0, self.wrong_frame_count - 1)
 
             # Convert OpenCV Frame to Tkinter PhotoImage for the webcam panel
             cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -491,12 +542,10 @@ class AslRecognizeGui:
         Returns:
             int: return code. 0 if successful
         """
+        self._LogSpeech(text)
         try:
             engine = pyttsx3.init()
-            engine.setProperty(
-                name="rate", 
-                value=150
-            )
+            engine.setProperty(name="rate", value=150)
             engine.say(text)
             engine.runAndWait()
             return 0
